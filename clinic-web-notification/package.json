@@ -1,0 +1,15 @@
+{
+  "name": "clinic-web-notification",
+  "version": "1.0.0",
+  "description": "Clinic WebSocket Notification Service",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Tailor Solutions Co.,Ltd.",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "ws": "^8.14.2"
+  }
+}

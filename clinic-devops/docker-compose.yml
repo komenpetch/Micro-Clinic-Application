@@ -1,0 +1,115 @@
+version: "3.9"
+services:
+  clinic-broker:
+    container_name: clinic-broker
+    image: rabbitmq:3.12-management-alpine
+    volumes:
+      - "./rabbit_data:/var/lib/rabbitmq/"
+      - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${BROKER_USER}
+      - RABBITMQ_DEFAULT_PASS=${BROKER_PASSWORD}
+
+  clinic-gateway:
+    container_name: clinic-gateway
+    image: "nginx:stable-bullseye"
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./nginx_gateway_development.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - clinic-frontend
+      - clinic-registration
+      
+  clinic-db:
+    container_name: clinic-db
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data/pgdata
+      - ./create-db.sql:/docker-entrypoint-initdb.d/create_database.sql
+
+  clinic-frontend:
+    container_name: clinic-frontend
+    build: 
+      context: ../clinic-frontend
+      dockerfile: ./docker/Dockerfile.development
+    volumes:
+      - "../clinic-frontend:/app"
+      - "/app/node_modules"
+    expose:
+      - "3000"
+    environment:
+      - REACT_APP_BASE_URL=${BASE_URL}
+      - REACT_APP_WS_NOTIFICATION_URL=${BASE_WS_URL}/ws-notification
+      - REACT_APP_EXCH_REGISTRATION=${EXCH_REGISTRATION}
+      - REACT_APP_EXCH_EXAMINED=${EXCH_EXAMINED}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=9000
+      - WDS_SOCKET_PATH=/wds
+
+  clinic-registration:
+    container_name: clinic-registration
+    build:
+      context: ../clinic-registration
+      dockerfile: ./docker/Dockerfile.development
+    volumes:
+      - "../clinic-registration:/server"
+      - "/server/node_modules"
+    expose:
+      - "8000"
+    links:
+      - clinic-db
+      - clinic-broker
+    environment:
+      - PORT=8000
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@clinic-db/registration
+      - BROKER_URL=amqp://${BROKER_USER}:${BROKER_PASSWORD}@clinic-broker/
+      - EXCH_REGISTRATION=${EXCH_REGISTRATION}
+
+  clinic-examination:
+    container_name: clinic-examination
+    build:
+      context: ../clinic-examination
+      dockerfile: ./docker/Dockerfile.development
+    volumes:
+      - "../clinic-examination:/server"
+      - "/server/node_modules"
+    expose:
+      - "8000"
+    links:
+      - clinic-db
+      - clinic-broker
+    environment:
+      - PORT=8000
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@clinic-db/examination
+      - BROKER_URL=amqp://${BROKER_USER}:${BROKER_PASSWORD}@clinic-broker/
+      - EXCH_REGISTRATION=${EXCH_REGISTRATION}
+      - EXCH_EXAMINED=${EXCH_EXAMINED}
+
+  clinic-web-notification:
+    container_name: clinic-web-notification
+    build:
+      context: ../clinic-web-notification
+      dockerfile: ./docker/Dockerfile.development
+    volumes:
+      - "../clinic-web-notification:/server"
+      - "/server/node_modules"
+    expose:
+      - "8000"
+    links:
+      - clinic-broker
+    environment:
+      - PORT=8000
+      - BROKER_URL=amqp://${BROKER_USER}:${BROKER_PASSWORD}@clinic-broker/
+      - EXCH_REGISTRATION=${EXCH_REGISTRATION}
+      - EXCH_EXAMINED=${EXCH_EXAMINED}

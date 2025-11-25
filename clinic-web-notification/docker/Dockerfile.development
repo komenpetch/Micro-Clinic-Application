@@ -1,0 +1,5 @@
+FROM node:lts-alpine3.18
+WORKDIR /server
+COPY package.json ./
+RUN npm install
+CMD npx supervisor server.js
